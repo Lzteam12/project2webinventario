@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Panel de Administración</h2>
+    <a href="{{ url_for('agregar_producto') }}" class="btn btn-success">
+        + Agregar Nuevo Producto
+    </a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Imagen</th>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Categoría</th>
+                <th>Disponible</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for producto in productos %}
+            <tr>
+                <td>
+                    {% if producto[6] %}
+                    <img src="{{ url_for('static', filename='uploads/' + producto[6]) }}" 
+                         class="admin-thumbnail" alt="{{ producto[1] }}">
+                    {% else %}
+                    <span class="text-muted">Sin imagen</span>
+                    {% endif %}
+                </td>
+                <td>{{ producto[1] }}</td>
+                <td>${{ "%.2f"|format(producto[3]) }}</td>
+                <td>{{ producto[4] }}</td>
+                <td>
+                    {% if producto[5] %}
+                    <span class="badge bg-success">Sí</span>
+                    {% else %}
+                    <span class="badge bg-danger">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('editar_producto', producto_id=producto[0]) }}" 
+                       class="btn btn-sm btn-warning">Editar</a>
+                    <a href="{{ url_for('eliminar_producto', producto_id=producto[0]) }}" 
+                       class="btn btn-sm btn-danger" 
+                       onclick="return confirm('¿Estás seguro de eliminar este producto?')">
+                       Eliminar
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

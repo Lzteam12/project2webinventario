@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Filtrar Productos</h5>
+                
+                <!-- Barra de búsqueda -->
+                <form method="GET" class="mb-3">
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control" 
+                               placeholder="Buscar productos..." value="{{ search }}">
+                        <button class="btn btn-primary" type="submit">Buscar</button>
+                    </div>
+                </form>
+
+                <!-- Filtro por categorías -->
+                <h6>Categorías</h6>
+                <div class="list-group">
+                    <a href="{{ url_for('index') }}" 
+                       class="list-group-item list-group-item-action {% if not categoria_seleccionada %}active{% endif %}">
+                        Todas las categorías
+                    </a>
+                    {% for categoria in categorias %}
+                    <a href="{{ url_for('index', categoria=categoria) }}" 
+                       class="list-group-item list-group-item-action {% if categoria_seleccionada == categoria %}active{% endif %}">
+                        {{ categoria }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <h2>Nuestros Productos</h2>
+        
+        {% if productos %}
+        <div class="row">
+            {% for producto in productos %}
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    {% if producto[6] %}
+                    <img src="{{ url_for('static', filename='uploads/' + producto[6]) }}" 
+                         class="card-img-top product-image" alt="{{ producto[1] }}">
+                    {% else %}
+                    <div class="card-img-top no-image">Sin imagen</div>
+                    {% endif %}
+                    
+                    <div class="card-body">
+                        <h5 class="card-title">{{ producto[1] }}</h5>
+                        <p class="card-text">{{ producto[2] or 'Sin descripción' }}</p>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="h5 text-primary">${{ "%.2f"|format(producto[3]) }}</span>
+                            <span class="badge bg-secondary">{{ producto[4] }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            No se encontraron productos que coincidan con tu búsqueda.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
