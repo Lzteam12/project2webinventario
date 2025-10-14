@@ -6,17 +6,17 @@ from werkzeug.utils import secure_filename
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
 # Configuración
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Credenciales del administrador (cámbialas por las tuyas)
+# Credenciales del administrador (usa variables de entorno en producción)
 ADMIN_CREDENTIALS = {
-    'username': 'admin',
-    'password': 'admin123'  # Cambia esto en producción
+    'username': os.environ.get('ADMIN_USERNAME', 'admin'),
+    'password': os.environ.get('ADMIN_PASSWORD', 'admin123')
 }
 
 # Crear carpetas si no existen
@@ -220,4 +220,4 @@ def eliminar_producto(producto_id):
     return redirect(url_for('admin'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
