@@ -8,12 +8,12 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
-# Configuración
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+# Configuración para Render
+app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'static', 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 
-# Credenciales del administrador (usa variables de entorno en producción)
+# Credenciales del administrador
 ADMIN_CREDENTIALS = {
     'username': os.environ.get('ADMIN_USERNAME', 'admin'),
     'password': os.environ.get('ADMIN_PASSWORD', 'admin123')
@@ -57,33 +57,36 @@ def login_required(f):
 # ===== RUTAS PÚBLICAS =====
 @app.route('/')
 def index():
-    search = request.args.get('search', '')
-    categoria = request.args.get('categoria', '')
-    
-    conn = sqlite3.connect('productos.db')
-    c = conn.cursor()
-    
-    if search:
-        c.execute("SELECT * FROM productos WHERE nombre LIKE ? AND disponible=1", 
-                 (f'%{search}%',))
-    elif categoria:
-        c.execute("SELECT * FROM productos WHERE categoria=? AND disponible=1", 
-                 (categoria,))
-    else:
-        c.execute("SELECT * FROM productos WHERE disponible=1")
-    
-    productos = c.fetchall()
-    conn.close()
-    
-    # Obtener categorías únicas para el filtro
-    conn = sqlite3.connect('productos.db')
-    c = conn.cursor()
-    c.execute("SELECT DISTINCT categoria FROM productos WHERE disponible=1")
-    categorias = [cat[0] for cat in c.fetchall()]
-    conn.close()
-    
-    return render_template('productos.html', productos=productos, 
-                         categorias=categorias, search=search, categoria_seleccionada=categoria)
+    try:
+        search = request.args.get('search', '')
+        categoria = request.args.get('categoria', '')
+        
+        conn = sqlite3.connect('productos.db')
+        c = conn.cursor()
+        
+        if search:
+            c.execute("SELECT * FROM productos WHERE nombre LIKE ? AND disponible=1", 
+                     (f'%{search}%',))
+        elif categoria:
+            c.execute("SELECT * FROM productos WHERE categoria=? AND disponible=1", 
+                     (categoria,))
+        else:
+            c.execute("SELECT * FROM productos WHERE disponible=1")
+        
+        productos = c.fetchall()
+        conn.close()
+        
+        # Obtener categorías únicas para el filtro
+        conn = sqlite3.connect('productos.db')
+        c = conn.cursor()
+        c.execute("SELECT DISTINCT categoria FROM productos WHERE disponible=1")
+        categorias = [cat[0] for cat in c.fetchall()]
+        conn.close()
+        
+        return render_template('productos.html', productos=productos, 
+                             categorias=categorias, search=search, categoria_seleccionada=categoria)
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 # ===== RUTAS DE ADMINISTRACIÓN =====
 @app.route('/admin/login', methods=['GET', 'POST'])
@@ -218,6 +221,11 @@ def eliminar_producto(producto_id):
         flash(f'Error al eliminar producto: {str(e)}', 'danger')
     
     return redirect(url_for('admin'))
+
+# Ruta de prueba para verificar que la app funciona
+@app.route('/health')
+def health():
+    return 'La aplicación está funcionando correctamente!'
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
