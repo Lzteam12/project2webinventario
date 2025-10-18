@@ -174,6 +174,10 @@ def agregar_producto():
             
             conn = get_db_connection()
             cur = conn.cursor()
+            
+            # DEBUG: Verificar datos antes de insertar
+            print(f"DEBUG: Insertando producto - Nombre: {nombre}, Precio: {precio}, Categoria: {categoria}")
+            
             cur.execute('''INSERT INTO productos 
                         (nombre, descripcion, precio, categoria, disponible, imagen)
                         VALUES (%s, %s, %s, %s, %s, %s)''',
@@ -182,10 +186,12 @@ def agregar_producto():
             conn.close()
             
             flash('Producto agregado exitosamente!', 'success')
-            return redirect(url_for('admin'))
+            return redirect(url_for('admin'))  # ← ESTA LÍNEA DEBE EJECUTARSE
         
         except Exception as e:
+            print(f"ERROR en agregar_producto: {str(e)}")  # ← Esto aparecerá en los logs
             flash(f'Error al agregar producto: {str(e)}', 'danger')
+            # NO hacer return aquí, dejar que continúe para mostrar el formulario otra vez
     
     return render_template('agregar_producto.html')
 
