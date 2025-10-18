@@ -8,11 +8,11 @@ from functools import wraps
 try:
     import psycopg
     POSTGRES_AVAILABLE = True
-    print("✅ Usando psycopg3 para PostgreSQL")
+    print("INFO: Usando psycopg3 para PostgreSQL")
 except ImportError:
     import sqlite3
     POSTGRES_AVAILABLE = False
-    print("⚠️  Usando SQLite como fallback")
+    print("INFO: Usando SQLite como fallback")
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
@@ -45,17 +45,17 @@ def get_db_connection():
         # PostgreSQL en Render con psycopg3
         try:
             conn = psycopg.connect(database_url)
-            print("✅ Conectado a PostgreSQL con psycopg3")
+            print("INFO: Conectado a PostgreSQL con psycopg3")
             return conn
         except Exception as e:
-            print(f"❌ Error conectando a PostgreSQL: {e}")
+            print(f"ERROR: Conectando a PostgreSQL: {e}")
             # Fallback a SQLite
             import sqlite3
             return sqlite3.connect('productos.db')
     else:
         # SQLite local (desarrollo)
         import sqlite3
-        print("🔧 Usando SQLite local")
+        print("INFO: Usando SQLite local")
         return sqlite3.connect('productos.db')
 
 def init_db():
@@ -78,9 +78,9 @@ def init_db():
                     )
                 ''')
             conn.commit()
-            print("✅ Tabla PostgreSQL creada/verificada")
+            print("INFO: Tabla PostgreSQL creada/verificada")
         except Exception as e:
-            print(f"❌ Error con PostgreSQL: {e}")
+            print(f"ERROR: Con PostgreSQL: {e}")
     else:
         # SQLite
         try:
@@ -97,9 +97,9 @@ def init_db():
                 )
             ''')
             conn.commit()
-            print("✅ Tabla SQLite creada/verificada")
+            print("INFO: Tabla SQLite creada/verificada")
         except Exception as e:
-            print(f"❌ Error con SQLite: {e}")
+            print(f"ERROR: Con SQLite: {e}")
     
     conn.close()
 
@@ -352,9 +352,9 @@ def health():
     try:
         conn = get_db_connection()
         conn.close()
-        return '✅ Aplicación y base de datos funcionando correctamente!'
+        return 'OK - Aplicacion y base de datos funcionando correctamente!'
     except Exception as e:
-        return f'❌ Error: {str(e)}', 500
+        return f'ERROR: {str(e)}', 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
