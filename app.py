@@ -4,20 +4,10 @@ import secrets
 from werkzeug.utils import secure_filename
 from functools import wraps
 
-# Import para PostgreSQL - versión compatible
-try:
-    import psycopg
-    POSTGRES_AVAILABLE = True
-    print("INFO: Usando psycopg3 para PostgreSQL")
-except ImportError:
-    import sqlite3
-    POSTGRES_AVAILABLE = False
-    print("INFO: Usando SQLite como fallback")
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(16))
 
-# Configuración para Render
+# Configuración
 app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'static', 'uploads')
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -38,70 +28,49 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def get_db_connection():
-    """Conecta a PostgreSQL en Render o SQLite localmente"""
+    """Conecta a PostgreSQL en Supabase"""
     database_url = os.environ.get('DATABASE_URL')
     
-    if database_url and POSTGRES_AVAILABLE:
-        # PostgreSQL en Render con psycopg3
+    if database_url:
         try:
+            import psycopg
+            # Conexión a Supabase
             conn = psycopg.connect(database_url)
-            print("INFO: Conectado a PostgreSQL con psycopg3")
             return conn
         except Exception as e:
-            print(f"ERROR: Conectando a PostgreSQL: {e}")
-            # Fallback a SQLite
+            print(f"Error conectando a Supabase: {e}")
+            # Fallback a SQLite local si hay error
             import sqlite3
             return sqlite3.connect('productos.db')
     else:
-        # SQLite local (desarrollo)
+        # Desarrollo local con SQLite
         import sqlite3
-        print("INFO: Usando SQLite local")
         return sqlite3.connect('productos.db')
 
 def init_db():
-    """Crea la tabla si no existe"""
+    """Crea la tabla si no existe en Supabase"""
     conn = get_db_connection()
     
-    if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-        # PostgreSQL
-        try:
-            with conn.cursor() as cur:
-                cur.execute('''
-                    CREATE TABLE IF NOT EXISTS productos (
-                        id SERIAL PRIMARY KEY,
-                        nombre VARCHAR(200) NOT NULL,
-                        descripcion TEXT,
-                        precio DECIMAL(10,2) NOT NULL,
-                        categoria VARCHAR(100) NOT NULL,
-                        disponible BOOLEAN DEFAULT TRUE,
-                        imagen VARCHAR(255)
-                    )
-                ''')
-            conn.commit()
-            print("INFO: Tabla PostgreSQL creada/verificada")
-        except Exception as e:
-            print(f"ERROR: Con PostgreSQL: {e}")
-    else:
-        # SQLite
-        try:
-            cur = conn.cursor()
-            cur.execute('''
-                CREATE TABLE IF NOT EXISTS productos (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    nombre TEXT NOT NULL,
-                    descripcion TEXT,
-                    precio REAL NOT NULL,
-                    categoria TEXT NOT NULL,
-                    disponible INTEGER DEFAULT 1,
-                    imagen TEXT
-                )
-            ''')
-            conn.commit()
-            print("INFO: Tabla SQLite creada/verificada")
-        except Exception as e:
-            print(f"ERROR: Con SQLite: {e}")
-    
-    conn.close()
+    try:
+        # Esta consulta funciona tanto para PostgreSQL como SQLite
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS productos (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(200) NOT NULL,
+                descripcion TEXT,
+                precio DECIMAL(10,2) NOT NULL,
+                categoria VARCHAR(100) NOT NULL,
+                disponible BOOLEAN DEFAULT TRUE,
+                imagen VARCHAR(255),
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        print("INFO: Tabla verificada/creada en Supabase")
+    except Exception as e:
+        print(f"ERROR creando tabla: {e}")
+    finally:
+        conn.close()
 
 # Inicializar base de datos al inicio
 init_db()
@@ -124,46 +93,22 @@ def index():
         categoria = request.args.get('categoria', '')
         
         conn = get_db_connection()
+        cur = conn.cursor()
         
-        if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-            # PostgreSQL
-            with conn.cursor() as cur:
-                if search:
-                    cur.execute("SELECT * FROM productos WHERE nombre ILIKE %s AND disponible = true", 
-                               (f'%{search}%',))
-                elif categoria:
-                    cur.execute("SELECT * FROM productos WHERE categoria = %s AND disponible = true", 
-                               (categoria,))
-                else:
-                    cur.execute("SELECT * FROM productos WHERE disponible = true")
-                
-                productos = cur.fetchall()
+        if search:
+            cur.execute("SELECT * FROM productos WHERE nombre ILIKE %s AND disponible = true", 
+                       (f'%{search}%',))
+        elif categoria:
+            cur.execute("SELECT * FROM productos WHERE categoria = %s AND disponible = true", 
+                       (categoria,))
         else:
-            # SQLite
-            cur = conn.cursor()
-            if search:
-                cur.execute("SELECT * FROM productos WHERE nombre LIKE ? AND disponible=1", 
-                           (f'%{search}%',))
-            elif categoria:
-                cur.execute("SELECT * FROM productos WHERE categoria=? AND disponible=1", 
-                           (categoria,))
-            else:
-                cur.execute("SELECT * FROM productos WHERE disponible=1")
-            
-            productos = cur.fetchall()
+            cur.execute("SELECT * FROM productos WHERE disponible = true")
         
-        conn.close()
+        productos = cur.fetchall()
         
-        # Obtener categorías únicas para el filtro
-        conn = get_db_connection()
-        if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-            with conn.cursor() as cur:
-                cur.execute("SELECT DISTINCT categoria FROM productos WHERE disponible = true")
-                categorias = [cat[0] for cat in cur.fetchall()]
-        else:
-            cur = conn.cursor()
-            cur.execute("SELECT DISTINCT categoria FROM productos WHERE disponible=1")
-            categorias = [cat[0] for cat in cur.fetchall()]
+        # Obtener categorías únicas
+        cur.execute("SELECT DISTINCT categoria FROM productos WHERE disponible = true")
+        categorias = [cat[0] for cat in cur.fetchall()]
         
         conn.close()
         
@@ -202,16 +147,9 @@ def admin_logout():
 @login_required
 def admin():
     conn = get_db_connection()
-    
-    if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM productos ORDER BY id DESC")
-            productos = cur.fetchall()
-    else:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM productos ORDER BY id DESC")
-        productos = cur.fetchall()
-    
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM productos ORDER BY id DESC")
+    productos = cur.fetchall()
     conn.close()
     return render_template('admin.html', productos=productos)
 
@@ -235,22 +173,12 @@ def agregar_producto():
                     imagen = filename
             
             conn = get_db_connection()
-            
-            if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-                with conn.cursor() as cur:
-                    cur.execute('''INSERT INTO productos 
-                                (nombre, descripcion, precio, categoria, disponible, imagen)
-                                VALUES (%s, %s, %s, %s, %s, %s)''',
-                             (nombre, descripcion, precio, categoria, disponible, imagen))
-                conn.commit()
-            else:
-                cur = conn.cursor()
-                cur.execute('''INSERT INTO productos 
-                            (nombre, descripcion, precio, categoria, disponible, imagen)
-                            VALUES (?, ?, ?, ?, ?, ?)''',
-                         (nombre, descripcion, precio, categoria, 1 if disponible else 0, imagen))
-                conn.commit()
-            
+            cur = conn.cursor()
+            cur.execute('''INSERT INTO productos 
+                        (nombre, descripcion, precio, categoria, disponible, imagen)
+                        VALUES (%s, %s, %s, %s, %s, %s)''',
+                     (nombre, descripcion, precio, categoria, disponible, imagen))
+            conn.commit()
             conn.close()
             
             flash('Producto agregado exitosamente!', 'success')
@@ -265,6 +193,7 @@ def agregar_producto():
 @login_required
 def editar_producto(producto_id):
     conn = get_db_connection()
+    cur = conn.cursor()
     
     if request.method == 'POST':
         try:
@@ -282,21 +211,11 @@ def editar_producto(producto_id):
                     file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
                     imagen = filename
             
-            if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-                with conn.cursor() as cur:
-                    cur.execute('''UPDATE productos SET 
-                                nombre=%s, descripcion=%s, precio=%s, categoria=%s, disponible=%s, imagen=%s
-                                WHERE id=%s''',
-                             (nombre, descripcion, precio, categoria, disponible, imagen, producto_id))
-                conn.commit()
-            else:
-                cur = conn.cursor()
-                cur.execute('''UPDATE productos SET 
-                            nombre=?, descripcion=?, precio=?, categoria=?, disponible=?, imagen=?
-                            WHERE id=?''',
-                         (nombre, descripcion, precio, categoria, 1 if disponible else 0, imagen, producto_id))
-                conn.commit()
-            
+            cur.execute('''UPDATE productos SET 
+                        nombre=%s, descripcion=%s, precio=%s, categoria=%s, disponible=%s, imagen=%s
+                        WHERE id=%s''',
+                     (nombre, descripcion, precio, categoria, disponible, imagen, producto_id))
+            conn.commit()
             conn.close()
             
             flash('Producto actualizado exitosamente!', 'success')
@@ -305,16 +224,8 @@ def editar_producto(producto_id):
         except Exception as e:
             flash(f'Error al actualizar producto: {str(e)}', 'danger')
     
-    # Obtener producto para editar
-    if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM productos WHERE id=%s", (producto_id,))
-            producto = cur.fetchone()
-    else:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM productos WHERE id=?", (producto_id,))
-        producto = cur.fetchone()
-    
+    cur.execute("SELECT * FROM productos WHERE id=%s", (producto_id,))
+    producto = cur.fetchone()
     conn.close()
     
     if not producto:
@@ -328,16 +239,9 @@ def editar_producto(producto_id):
 def eliminar_producto(producto_id):
     try:
         conn = get_db_connection()
-        
-        if os.environ.get('DATABASE_URL') and POSTGRES_AVAILABLE:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM productos WHERE id=%s", (producto_id,))
-            conn.commit()
-        else:
-            cur = conn.cursor()
-            cur.execute("DELETE FROM productos WHERE id=?", (producto_id,))
-            conn.commit()
-        
+        cur = conn.cursor()
+        cur.execute("DELETE FROM productos WHERE id=%s", (producto_id,))
+        conn.commit()
         conn.close()
         
         flash('Producto eliminado exitosamente!', 'success')
@@ -346,13 +250,14 @@ def eliminar_producto(producto_id):
     
     return redirect(url_for('admin'))
 
-# Ruta de prueba para verificar que la app funciona
 @app.route('/health')
 def health():
     try:
         conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
         conn.close()
-        return 'OK - Aplicacion y base de datos funcionando correctamente!'
+        return 'OK - App conectada a Supabase correctamente'
     except Exception as e:
         return f'ERROR: {str(e)}', 500
 
